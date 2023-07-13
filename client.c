@@ -79,8 +79,6 @@ int main(int argc, char *argv[])
     {
         sleep(1);
     }
-    // Close the socket.
-    // close(sockfd);
 
     return 0;
 }
@@ -95,7 +93,6 @@ void *fun_sender(void *arg)
     while (1)
     {
         pthread_mutex_lock(&mutex);
-        //dprintf(2, "%s > ", name);
         pthread_mutex_unlock(&mutex);
         fgets(message, 1024, stdin);
         if(strcmp(message, "\n") == 0)
