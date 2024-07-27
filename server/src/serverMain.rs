@@ -1,30 +1,72 @@
 use if_addrs::get_if_addrs;
 use std::{
-    net::{IpAddr, UdpSocket},
-    thread::{self},
-    time::Duration,
+    io::{Read, Write}, net::{IpAddr, TcpListener, TcpStream, UdpSocket}, thread::{self}, time::Duration
 };
 
+const UDP_SENDER_INTERVAL: u64 = 5000;
+const TCP_PORT: i32 = 18200;
+
 fn main() {
+    let server_ip: IpAddr;
     match get_local_ip() {
         Some(ip) => {
-            scheduled_thread(ip);
+            server_ip = ip;
+            announcement_thread(ip, Duration::from_millis(UDP_SENDER_INTERVAL));
+        }
+        None => {
+            eprintln!("Failed to obtain local IP address.");
+            std::process::exit(1);
+        }
+    }
 
-            loop {
-                thread::sleep(Duration::from_secs(60));
+    let listener = TcpListener::bind(format!("{}:{}", server_ip, TCP_PORT)).unwrap_or_else(|_err| {
+        eprintln!("Failed to bind to {}:{}", server_ip, TCP_PORT);
+        std::process::exit(1);
+    });
+
+    for stream in listener.incoming() {
+        match stream {
+            Ok(stream) => {
+                thread::spawn(move || {
+                    handle_client(stream);
+                });
+            }
+            Err(err) => {
+                eprintln!("Connection failed: {}", err);
             }
         }
-        None => println!("nessun IP trovato :("),
     }
 }
 
-fn scheduled_thread(ip: IpAddr) {
-    thread::spawn(move || {
-        let millis = Duration::from_millis(5000);
 
+fn handle_client(mut stream: TcpStream){
+    loop {
+        let mut read = [0; 1028];
+        match stream.read(&mut read) {
+            Ok(n) => {
+                if n == 0 { 
+                    // connection was closed
+                    break;
+                }
+                stream.write(&read[0..n]).unwrap();
+            }
+            Err(err) => {
+                panic!("{}", err);
+            }
+        }
+    }
+}
+
+
+
+
+
+
+fn announcement_thread(ip: IpAddr, millis: Duration) {
+    println!("[V] announcement thread started.");
+    thread::spawn(move || {
         loop {
             udp_notice(ip.to_string());
-            println!("message sent!");
             thread::sleep(millis);
         }
     });
