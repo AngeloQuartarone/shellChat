@@ -1,6 +1,6 @@
 use if_addrs::get_if_addrs;
 use std::{
-    io::{Read, Write}, net::{IpAddr, TcpListener, TcpStream, UdpSocket}, thread::{self}, time::Duration
+    io::{self, BufRead, Read, Write}, net::{IpAddr, TcpListener, TcpStream, UdpSocket}, thread::{self}, time::Duration
 };
 
 const UDP_SENDER_INTERVAL: u64 = 5000;
@@ -39,22 +39,77 @@ fn main() {
 }
 
 
-fn handle_client(mut stream: TcpStream){
-    loop {
-        let mut read = [0; 1028];
-        match stream.read(&mut read) {
-            Ok(n) => {
-                if n == 0 { 
-                    // connection was closed
+// fn handle_client(mut stream: TcpStream){
+//     let mut input = String::new();
+//     loop {
+//         let mut read = [0; 1028];
+//         match stream.read(&mut read) {
+//             Ok(n) => {
+//                 if n == 0 { 
+//                     // connection was closed
+//                     break;
+//                 }
+//                 println!("Received: {}", String::from_utf8_lossy(&read[0..n]));
+//                 //stream.write(&read[0..n]).unwrap();
+//             }
+//             Err(err) => {
+//                 panic!("{}", err);
+//             }
+//         }
+//         input.clear();
+//         io::stdin().read_line(&mut input).expect("error reading from stdin");
+//         let message = input.trim();
+//         stream.write_all(message.as_bytes()).expect("error writing to stream");
+
+//     }
+// }
+
+fn handle_client(stream: TcpStream) {
+    let mut read_stream = stream.try_clone().expect("Failed to clone stream");
+    let mut write_stream = stream.try_clone().expect("Failed to clone stream");
+
+    let read_thread = thread::spawn(move || {
+        let mut buffer = [0; 1028];
+        loop {
+            match read_stream.read(&mut buffer) {
+                Ok(n) => {
+                    if n == 0 {
+                        // Connessione chiusa
+                        println!("Connection closed by peer");
+                        break;
+                    }
+                    println!("Client: {}", String::from_utf8_lossy(&buffer[0..n]));
+                }
+                Err(err) => {
+                    eprintln!("Error reading from stream: {}", err);
                     break;
                 }
-                stream.write(&read[0..n]).unwrap();
-            }
-            Err(err) => {
-                panic!("{}", err);
             }
         }
-    }
+    });
+
+    let write_thread = thread::spawn(move || {
+        let stdin = io::stdin();
+        let mut input = String::new();
+        loop {
+            input.clear();
+            stdin.lock().read_line(&mut input).expect("Failed to read from stdin");
+            let message = input.trim();
+            if message.is_empty() {
+                continue;
+            }
+            match write_stream.write_all(message.as_bytes()) {
+                Ok(_) => {}
+                Err(err) => {
+                    eprintln!("Error writing to stream: {}", err);
+                    break;
+                }
+            }
+        }
+    });
+
+    read_thread.join().unwrap();
+    write_thread.join().unwrap();
 }
 
 
