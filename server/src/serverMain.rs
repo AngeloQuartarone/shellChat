@@ -118,7 +118,7 @@ fn handle_client(stream: TcpStream) {
 
 
 fn announcement_thread(ip: IpAddr, millis: Duration) {
-    println!("[V] announcement thread started.");
+    println!("Announcement thread started.");
     thread::spawn(move || {
         loop {
             udp_notice(ip.to_string());
